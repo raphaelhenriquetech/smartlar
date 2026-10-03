@@ -3,7 +3,7 @@
 -- Rode bloco a bloco no SQL Editor do Supabase, ou pelo CLI:
 --   supabase db query --linked "<query>"
 -- Os testes que alteram dados ficam entre BEGIN e ROLLBACK: nada é gravado.
--- Os números de pedido (#1004, #1007, #1010) vêm do seed.
+-- Os números de pedido (#1003, #1004, #1007, #1010) vêm do seed.
 -- =============================================================================
 
 -- 1) Cálculo: #1010 = 2x Câmera IP (450,00) + 1x Sensor de presença (180,00)
@@ -29,13 +29,19 @@ begin;
 update public.pedidos set status = 'concluido' where numero = 1010;
 rollback;
 
--- 4) Agendar sem técnico e data (#1007 está aprovado)
+-- 4) Aprovar o #1010 sem forma de pagamento (transição válida, dado faltando)
+--    Esperado: ERRO "Para o status "aprovado" é obrigatório informar a forma de pagamento."
+begin;
+update public.pedidos set status = 'aprovado' where numero = 1010;
+rollback;
+
+-- 5) Agendar sem técnico e data (#1007 está aprovado)
 --    Esperado: ERRO "Para o status "agendado" é obrigatório informar o técnico e a data..."
 begin;
 update public.pedidos set status = 'agendado' where numero = 1007;
 rollback;
 
--- 5) Itens travados fora do orçamento: adicionar item no #1004 (agendado)
+-- 6) Itens travados fora do orçamento: adicionar item no #1004 (agendado)
 --    Esperado: ERRO "Não é possível alterar itens de um pedido com status "agendado"..."
 begin;
 insert into public.itens_pedido (pedido_id, produto_id, quantidade)
@@ -44,7 +50,7 @@ from public.pedidos p, public.produtos pr
 where p.numero = 1004 and pr.nome = 'Tomada inteligente';
 rollback;
 
--- 6) Views
+-- 7) Views
 select * from public.vw_dashboard_indicadores;
 
 select numero,
@@ -58,7 +64,7 @@ select numero, status, cliente_nome, tecnico_nome, valor_total, forma_pagamento,
 from public.vw_pedidos_detalhados
 order by numero;
 
--- 7) Histórico de status do #1003 (passou por todo o fluxo até concluído)
+-- 8) Histórico de status do #1003 (passou por todo o fluxo até concluído)
 select h.status_anterior, h.status_novo,
        to_char(h.alterado_em at time zone 'America/Sao_Paulo', 'DD/MM HH24:MI') as quando
 from public.historico_status h
@@ -66,15 +72,15 @@ join public.pedidos p on p.id = h.pedido_id
 where p.numero = 1003
 order by h.alterado_em;
 
--- 8) Permissões
--- 8a) anon (sem login) não lê nada
+-- 9) Permissões
+-- 9a) anon (sem login) não lê nada
 --     Esperado: ERRO "permission denied for table clientes"
 begin;
 set local role anon;
 select count(*) from public.clientes;
 rollback;
 
--- 8b) authenticated cria pedido pela RPC (cliente sem pedidos, Patrícia)
+-- 9b) authenticated cria pedido pela RPC (cliente sem pedidos, Patrícia)
 --     Esperado: sem erro (o pedido é desfeito no rollback)
 begin;
 set local role authenticated;
@@ -86,9 +92,19 @@ select public.criar_pedido(
   'teste de permissão');
 rollback;
 
--- 8c) authenticated não escreve no histórico
+-- 9c) authenticated não escreve no histórico
 --     Esperado: ERRO "permission denied for table historico_status"
 begin;
 set local role authenticated;
 delete from public.historico_status;
+rollback;
+
+-- 9d) authenticated tenta excluir o #1003 (concluído)
+--     Esperado: ERRO "Só é possível excluir pedidos em orçamento..." (e não "0 linhas").
+--     A policy deixa a linha visível e o GRANT de delete existe, então o DELETE
+--     chega ao trigger BEFORE DELETE, que aborta. "0 linhas sem erro" só
+--     aconteceria se a RLS escondesse a linha: RLS filtra em silêncio, trigger falha.
+begin;
+set local role authenticated;
+delete from public.pedidos where numero = 1003;
 rollback;
