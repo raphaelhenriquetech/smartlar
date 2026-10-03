@@ -9,6 +9,7 @@ import Clientes from './pages/Clientes'
 import NovoPedido from './pages/NovoPedido'
 import Pedidos from './pages/Pedidos'
 import PedidoDetalhe from './pages/PedidoDetalhe'
+import Agenda from './pages/Agenda'
 
 function EmConstrucao() {
   return <EmptyState titulo="Tela em construção" />
@@ -31,7 +32,7 @@ export default function App() {
             <Route path="pedidos" element={<Pedidos />} />
             <Route path="pedidos/novo" element={<NovoPedido />} />
             <Route path="pedidos/:id" element={<PedidoDetalhe />} />
-            <Route path="agenda" element={<EmConstrucao />} />
+            <Route path="agenda" element={<Agenda />} />
             <Route path="clientes" element={<Clientes />} />
             <Route path="produtos" element={<Produtos />} />
             <Route path="*" element={<Navigate to="/" replace />} />
