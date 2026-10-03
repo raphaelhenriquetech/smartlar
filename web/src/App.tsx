@@ -4,6 +4,7 @@ import { AuthProvider, RequireAuth } from './auth/AuthProvider'
 import { Layout } from './components/Layout'
 import { EmptyState } from './components/ui'
 import Login from './pages/Login'
+import Produtos from './pages/Produtos'
 
 function EmConstrucao() {
   return <EmptyState titulo="Tela em construção" />
@@ -28,7 +29,7 @@ export default function App() {
             <Route path="pedidos/:id" element={<EmConstrucao />} />
             <Route path="agenda" element={<EmConstrucao />} />
             <Route path="clientes" element={<EmConstrucao />} />
-            <Route path="produtos" element={<EmConstrucao />} />
+            <Route path="produtos" element={<Produtos />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
         </Routes>
