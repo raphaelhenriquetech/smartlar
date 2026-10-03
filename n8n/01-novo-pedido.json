@@ -1,0 +1,251 @@
+{
+  "name": "SmartLar · 01 Novo pedido",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Novo pedido → planilha\nO **Database Webhook** do Supabase (INSERT em `pedidos`) chama este webhook, protegido pelo header `x-webhook-secret`.\n\nO payload chega com `valor_total = 0` (o pedido é inserido antes dos itens), então o workflow **busca o pedido de novo** em `vw_pedidos_detalhados`, já com total e nome do cliente. Se não encontrar, gera erro (vai para o workflow 00).",
+        "height": 280,
+        "width": 560,
+        "color": 7
+      },
+      "id": "d0dcdb53-b31b-4191-9105-d6f2c6263b2c",
+      "name": "Nota",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        -340
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "novo-pedido",
+        "authentication": "headerAuth",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "7d647970-b2f7-4c0a-b422-510490071ace",
+      "name": "Webhook novo pedido",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "e638a601-7424-4a0d-9f76-b52b12bac139",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": null,
+          "name": "Webhook SmartLar"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "tableId": "vw_pedidos_detalhados",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "keyValue": "={{ $json.body.record.id }}"
+            }
+          ]
+        }
+      },
+      "id": "b2cc4c44-5aec-48ab-892a-e358aa16ac37",
+      "name": "Buscar pedido",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        240,
+        0
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": null,
+          "name": "Supabase SmartLar"
+        }
+      },
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "0496f06e-eafd-4c9c-8997-1d404ffc8dcf",
+              "leftValue": "={{ $json.id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "bb8cc7d8-ae98-4f2d-b8b4-273392feff70",
+      "name": "Encontrou o pedido?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        480,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const FUSO = 'America/Sao_Paulo';\n// Aceita ISO (PostgREST: 2026-10-03T12:00:00+00:00) e texto do Postgres (2026-10-03 12:00:00+00).\nconst emSP = (valor, formato) => {\n  if (!valor) return '';\n  let data = DateTime.fromISO(valor);\n  if (!data.isValid) data = DateTime.fromSQL(valor);\n  return data.isValid ? data.setZone(FUSO).toFormat(formato) : String(valor);\n};\n\nconst formatarTelefone = (valor) => {\n  const d = String(valor ?? '').replace(/\\D/g, '');\n  if (d.length === 11) return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;\n  if (d.length === 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;\n  return d;\n};\n\n// Uma linha por pedido para a aba \"Novos pedidos\".\nreturn $input.all().map(({ json: p }) => ({\n  json: {\n    'Data (SP)': emSP(p.created_at, 'dd/MM/yyyy HH:mm'),\n    'Pedido': p.numero,\n    'Cliente': p.cliente_nome,\n    'Telefone': formatarTelefone(p.cliente_telefone),\n    'Valor total': Number(p.valor_total),\n    'Observações': p.observacoes ?? '',\n  },\n}));"
+      },
+      "id": "7149baa4-8ba0-4a1e-b159-3732cbf47f33",
+      "name": "Montar linha",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        720,
+        -100
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "resource": "sheet",
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1E67t6jBxZMqSXO1DFsRmaGhMCZs_LYtYZaXEzgU254U",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Novos pedidos",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "id": "71d5b230-7105-4d9a-90d5-7d6d2cf99c6e",
+      "name": "Registrar novo pedido",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        960,
+        -100
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": null,
+          "name": "Google Sheets SmartLar"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "errorType": "errorMessage",
+        "errorMessage": "=Pedido {{ $('Webhook novo pedido').first().json.body.record.id }} não encontrado em vw_pedidos_detalhados"
+      },
+      "id": "bc4af555-be96-4d01-8262-73d4de8582bc",
+      "name": "Pedido não encontrado",
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [
+        720,
+        120
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook novo pedido": {
+      "main": [
+        [
+          {
+            "node": "Buscar pedido",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar pedido": {
+      "main": [
+        [
+          {
+            "node": "Encontrou o pedido?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Encontrou o pedido?": {
+      "main": [
+        [
+          {
+            "node": "Montar linha",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pedido não encontrado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Montar linha": {
+      "main": [
+        [
+          {
+            "node": "Registrar novo pedido",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Sao_Paulo",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "pinData": {},
+  "active": false,
+  "tags": []
+}

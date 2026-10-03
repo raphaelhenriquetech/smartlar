@@ -1,0 +1,323 @@
+{
+  "name": "SmartLar · 03 Faturamento",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Pedido concluído → faturamento\nO **Database Webhook** do Supabase (UPDATE em `pedidos`) dispara a cada alteração de pedido. O IF deixa passar só a **transição para concluído** (`record.status = concluido` e `old_record.status ≠ concluido`); o resto termina em \"Ignorar\".\n\nDepois busca o pedido em `vw_pedidos_detalhados` (data de conclusão, cliente, forma de pagamento) e grava na aba **Faturamento**.",
+        "height": 300,
+        "width": 600,
+        "color": 7
+      },
+      "id": "f47176a3-9b6a-476d-bc9b-9acdf4e058dc",
+      "name": "Nota",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        -360
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "pedido-concluido",
+        "authentication": "headerAuth",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "2e002fde-6091-435b-a8c5-c3c6b8d2cd68",
+      "name": "Webhook pedido atualizado",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "20d9d4c7-dafc-4a02-a249-6e8042e0fa70",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": null,
+          "name": "Webhook SmartLar"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "fa4a5dca-3f19-48f4-be87-041d37cde978",
+              "leftValue": "={{ $json.body.record.status }}",
+              "rightValue": "concluido",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "09a54173-b72c-49f3-ac81-8d6cb41867e0",
+              "leftValue": "={{ $json.body.old_record.status }}",
+              "rightValue": "concluido",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "1735318f-3d60-410a-a4f7-abad3040e14f",
+      "name": "Virou concluído?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        240,
+        0
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "0d22dbd0-e75e-4e5f-a31f-c0d26ae0df58",
+      "name": "Ignorar (não é conclusão)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        480,
+        140
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "tableId": "vw_pedidos_detalhados",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "keyValue": "={{ $json.body.record.id }}"
+            }
+          ]
+        }
+      },
+      "id": "218af68a-1b38-4b59-915f-16a8bf6ea4b6",
+      "name": "Buscar pedido",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        480,
+        -100
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": null,
+          "name": "Supabase SmartLar"
+        }
+      },
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "671a2d33-d0f5-43ee-9e45-5a682512c2ca",
+              "leftValue": "={{ $json.id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "0846dcdf-993c-42da-b9a6-d5f9aa48ef3e",
+      "name": "Encontrou o pedido?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        720,
+        -100
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const FUSO = 'America/Sao_Paulo';\n// Aceita ISO (PostgREST: 2026-10-03T12:00:00+00:00) e texto do Postgres (2026-10-03 12:00:00+00).\nconst emSP = (valor, formato) => {\n  if (!valor) return '';\n  let data = DateTime.fromISO(valor);\n  if (!data.isValid) data = DateTime.fromSQL(valor);\n  return data.isValid ? data.setZone(FUSO).toFormat(formato) : String(valor);\n};\n\nconst PAGAMENTO = {\n  pix: 'Pix',\n  cartao_credito: 'Cartão de crédito',\n  cartao_debito: 'Cartão de débito',\n  boleto: 'Boleto',\n  dinheiro: 'Dinheiro',\n};\n\nreturn $input.all().map(({ json: p }) => ({\n  json: {\n    'Data da conclusão': emSP(p.concluido_em ?? p.updated_at, 'dd/MM/yyyy HH:mm'),\n    'Pedido': p.numero,\n    'Cliente': p.cliente_nome,\n    'Valor': Number(p.valor_total),\n    'Forma de pagamento': PAGAMENTO[p.forma_pagamento] ?? p.forma_pagamento ?? '',\n    'Técnico': p.tecnico_nome ?? '',\n  },\n}));"
+      },
+      "id": "21d46442-756a-478c-a0e3-caa805c6052c",
+      "name": "Montar linha",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        -200
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "resource": "sheet",
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1E67t6jBxZMqSXO1DFsRmaGhMCZs_LYtYZaXEzgU254U",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Faturamento",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "id": "b587bcb9-0028-4fca-aed8-9a3c7dbb7e20",
+      "name": "Registrar faturamento",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1200,
+        -200
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": null,
+          "name": "Google Sheets SmartLar"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "errorType": "errorMessage",
+        "errorMessage": "=Pedido {{ $('Webhook pedido atualizado').first().json.body.record.id }} não encontrado em vw_pedidos_detalhados"
+      },
+      "id": "95f3163d-c8ed-4048-a0e6-75413d279955",
+      "name": "Pedido não encontrado",
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [
+        960,
+        20
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook pedido atualizado": {
+      "main": [
+        [
+          {
+            "node": "Virou concluído?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Virou concluído?": {
+      "main": [
+        [
+          {
+            "node": "Buscar pedido",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Ignorar (não é conclusão)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar pedido": {
+      "main": [
+        [
+          {
+            "node": "Encontrou o pedido?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Encontrou o pedido?": {
+      "main": [
+        [
+          {
+            "node": "Montar linha",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pedido não encontrado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Montar linha": {
+      "main": [
+        [
+          {
+            "node": "Registrar faturamento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Sao_Paulo",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "pinData": {},
+  "active": false,
+  "tags": []
+}

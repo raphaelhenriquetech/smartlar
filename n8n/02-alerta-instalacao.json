@@ -1,0 +1,300 @@
+{
+  "name": "SmartLar · 02 Alerta de instalação",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Alerta diário (18h, horário de Brasília)\nConsulta a view `vw_instalacoes_amanha`: o filtro \"amanhã no fuso de SP\" fica no banco.\n\n**Always Output Data** no Supabase garante que o fluxo continue mesmo sem resultados: nesse caso grava uma linha \"Sem instalações para amanhã\", para provar que a verificação rodou.",
+        "height": 280,
+        "width": 560,
+        "color": 7
+      },
+      "id": "767f7ee2-edcc-42f9-82fd-5ad890e5f4a0",
+      "name": "Nota",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        -340
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "days",
+              "daysInterval": 1,
+              "triggerAtHour": 18,
+              "triggerAtMinute": 0
+            }
+          ]
+        }
+      },
+      "id": "1aba9715-ec48-47f6-9261-ab6f2567b2b8",
+      "name": "Todo dia às 18h",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "row",
+        "operation": "getAll",
+        "tableId": "vw_instalacoes_amanha",
+        "returnAll": true,
+        "filterType": "none"
+      },
+      "id": "a2099341-ce8b-4f68-872a-b50d5c912de1",
+      "name": "Instalações de amanhã",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        240,
+        0
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": null,
+          "name": "Supabase SmartLar"
+        }
+      },
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "117ff152-94da-466c-803c-a35847a9a08c",
+              "leftValue": "={{ $json.id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "167349b1-50fc-4d61-b451-ad28471ef704",
+      "name": "Tem instalações?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        480,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const FUSO = 'America/Sao_Paulo';\n// Aceita ISO (PostgREST: 2026-10-03T12:00:00+00:00) e texto do Postgres (2026-10-03 12:00:00+00).\nconst emSP = (valor, formato) => {\n  if (!valor) return '';\n  let data = DateTime.fromISO(valor);\n  if (!data.isValid) data = DateTime.fromSQL(valor);\n  return data.isValid ? data.setZone(FUSO).toFormat(formato) : String(valor);\n};\n\nconst formatarTelefone = (valor) => {\n  const d = String(valor ?? '').replace(/\\D/g, '');\n  if (d.length === 11) return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;\n  if (d.length === 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;\n  return d;\n};\n\nconst geradoEm = $now.setZone(FUSO).toFormat('dd/MM/yyyy HH:mm');\nreturn $input.all().map(({ json: i }) => ({\n  json: {\n    'Gerado em': geradoEm,\n    'Situação': 'Instalação agendada',\n    'Data da instalação': emSP(i.data_instalacao, 'dd/MM/yyyy'),\n    'Horário': emSP(i.data_instalacao, 'HH:mm'),\n    'Pedido': i.numero,\n    'Cliente': i.cliente_nome,\n    'Endereço': i.cliente_endereco,\n    'Telefone': formatarTelefone(i.cliente_telefone),\n    'Técnico': i.tecnico_nome ?? '',\n  },\n}));"
+      },
+      "id": "f00d330c-b6ff-4fe4-bfc1-31aa5b7b0283",
+      "name": "Uma linha por instalação",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        720,
+        -100
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "resource": "sheet",
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1E67t6jBxZMqSXO1DFsRmaGhMCZs_LYtYZaXEzgU254U",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Alertas instalação",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "id": "08185109-12f6-4b99-9dee-171585e3c458",
+      "name": "Registrar alertas",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        960,
+        -100
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": null,
+          "name": "Google Sheets SmartLar"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const FUSO = 'America/Sao_Paulo';\nconst agora = $now.setZone(FUSO);\n\n// Mesmas colunas da outra ramificação, com a situação explicando o vazio.\nreturn [{\n  json: {\n    'Gerado em': agora.toFormat('dd/MM/yyyy HH:mm'),\n    'Situação': 'Sem instalações para amanhã',\n    'Data da instalação': agora.plus({ days: 1 }).toFormat('dd/MM/yyyy'),\n    'Horário': '',\n    'Pedido': '',\n    'Cliente': '',\n    'Endereço': '',\n    'Telefone': '',\n    'Técnico': '',\n  },\n}];"
+      },
+      "id": "7264c170-a2d5-4239-baca-f5a0aac74c4f",
+      "name": "Sem instalações",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        720,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "resource": "sheet",
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1E67t6jBxZMqSXO1DFsRmaGhMCZs_LYtYZaXEzgU254U",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Alertas instalação",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "id": "ef18e293-d062-4393-8c3a-b406d8df80a1",
+      "name": "Registrar ausência",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        960,
+        120
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": null,
+          "name": "Google Sheets SmartLar"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    }
+  ],
+  "connections": {
+    "Todo dia às 18h": {
+      "main": [
+        [
+          {
+            "node": "Instalações de amanhã",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Instalações de amanhã": {
+      "main": [
+        [
+          {
+            "node": "Tem instalações?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tem instalações?": {
+      "main": [
+        [
+          {
+            "node": "Uma linha por instalação",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Sem instalações",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Uma linha por instalação": {
+      "main": [
+        [
+          {
+            "node": "Registrar alertas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sem instalações": {
+      "main": [
+        [
+          {
+            "node": "Registrar ausência",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Sao_Paulo",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "pinData": {},
+  "active": false,
+  "tags": []
+}
