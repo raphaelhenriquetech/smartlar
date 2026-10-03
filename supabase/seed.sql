@@ -94,6 +94,16 @@ begin
 end;
 $$;
 
+-- Momento dentro do mês corrente (fuso SP): 0 = início do mês, 1 = agora.
+-- Mantém a ordem cronológica em qualquer dia em que o seed rodar.
+create function pg_temp.no_mes(p_fracao double precision)
+returns timestamptz
+language sql
+as $$
+  select date_trunc('month', now(), 'America/Sao_Paulo')
+       + (now() - date_trunc('month', now(), 'America/Sao_Paulo')) * p_fracao;
+$$;
+
 -- Avança o status por UPDATE (passando pelos triggers) e retroage a data no histórico.
 create function pg_temp.avancar(
   p_pedido_id        uuid,
@@ -121,6 +131,8 @@ $$;
 
 -- Pedidos ---------------------------------------------------------------------
 -- Criados em ordem cronológica, para o número (#1001...) acompanhar a data.
+-- #1001 é do mês anterior; os demais são criados dentro do mês corrente
+-- (pg_temp.no_mes), para aparecerem no indicador "pedidos do mês".
 --
 -- #1001 concluido (mês anterior)  #1006 agendado (+3 dias, 14h)
 -- #1002 cancelado                 #1007 aprovado (aguardando agendamento)
@@ -157,9 +169,9 @@ begin
       pg_temp.item('Fita LED inteligente 5m', 3),
       pg_temp.item('Tomada inteligente', 4)),
     'Cliente desistiu: vai reformar a cozinha antes. Retomar contato em 2 meses.',
-    now() - interval '15 days');
-  perform pg_temp.avancar(v_id, 'aprovado',  now() - interval '13 days', p_forma_pagamento => 'boleto');
-  perform pg_temp.avancar(v_id, 'cancelado', now() - interval '9 days');
+    pg_temp.no_mes(0.05));
+  perform pg_temp.avancar(v_id, 'aprovado',  pg_temp.no_mes(0.10), p_forma_pagamento => 'boleto');
+  perform pg_temp.avancar(v_id, 'cancelado', pg_temp.no_mes(0.30));
 
   -- #1003 concluído neste mês (entra no "faturado no mês")
   -- 8x 89,90 + 2x 249 + 1x 399 = R$ 1.616,20
@@ -169,12 +181,12 @@ begin
       pg_temp.item('Interruptor inteligente touch', 2),
       pg_temp.item('Assistente de voz', 1)),
     'Cenas de iluminação na sala e no home theater.',
-    now() - interval '14 days');
-  perform pg_temp.avancar(v_id, 'aprovado', now() - interval '12 days', p_forma_pagamento => 'pix');
-  perform pg_temp.avancar(v_id, 'agendado', now() - interval '11 days',
-    p_tecnico => 'Pedro Souza', p_data_instalacao => now() - interval '5 hours');
-  perform pg_temp.avancar(v_id, 'em_andamento', now() - interval '5 hours');
-  perform pg_temp.avancar(v_id, 'concluido',    now() - interval '2 hours');
+    pg_temp.no_mes(0.08));
+  perform pg_temp.avancar(v_id, 'aprovado', pg_temp.no_mes(0.15), p_forma_pagamento => 'pix');
+  perform pg_temp.avancar(v_id, 'agendado', pg_temp.no_mes(0.20),
+    p_tecnico => 'Pedro Souza', p_data_instalacao => pg_temp.no_mes(0.75));
+  perform pg_temp.avancar(v_id, 'em_andamento', pg_temp.no_mes(0.75));
+  perform pg_temp.avancar(v_id, 'concluido',    pg_temp.no_mes(0.85));
 
   -- #1004 agendado para AMANHÃ às 9h (alvo da automação de lembrete)
   -- 3x 450 + 2x 95 = R$ 1.540,00
@@ -183,23 +195,23 @@ begin
       pg_temp.item('Câmera IP', 3),
       pg_temp.item('Sensor de abertura porta/janela', 2)),
     'Apartamento: avisar a portaria com 1 dia de antecedência; acesso pela garagem.',
-    now() - interval '10 days');
-  perform pg_temp.avancar(v_id, 'aprovado', now() - interval '8 days', p_forma_pagamento => 'cartao_credito');
-  perform pg_temp.avancar(v_id, 'agendado', now() - interval '7 days',
+    pg_temp.no_mes(0.12));
+  perform pg_temp.avancar(v_id, 'aprovado', pg_temp.no_mes(0.25), p_forma_pagamento => 'cartao_credito');
+  perform pg_temp.avancar(v_id, 'agendado', pg_temp.no_mes(0.35),
     p_tecnico => 'Lucas Andrade', p_data_instalacao => v_hoje + interval '1 day 9 hours');
 
-  -- #1005 em andamento (instalação começou há 2 horas)
+  -- #1005 em andamento (instalação começou há pouco)
   -- 3x 180 + 1x 349 = R$ 889,00
   v_id := pg_temp.novo_pedido('11987651234',
     jsonb_build_array(
       pg_temp.item('Sensor de presença', 3),
       pg_temp.item('Hub de automação Zigbee', 1)),
     'Sensores no corredor, na sala e no escritório, integrados ao hub.',
-    now() - interval '9 days');
-  perform pg_temp.avancar(v_id, 'aprovado', now() - interval '7 days', p_forma_pagamento => 'pix');
-  perform pg_temp.avancar(v_id, 'agendado', now() - interval '6 days',
-    p_tecnico => 'Lucas Andrade', p_data_instalacao => now() - interval '2 hours');
-  perform pg_temp.avancar(v_id, 'em_andamento', now() - interval '2 hours');
+    pg_temp.no_mes(0.18));
+  perform pg_temp.avancar(v_id, 'aprovado', pg_temp.no_mes(0.30), p_forma_pagamento => 'pix');
+  perform pg_temp.avancar(v_id, 'agendado', pg_temp.no_mes(0.40),
+    p_tecnico => 'Lucas Andrade', p_data_instalacao => pg_temp.no_mes(0.92));
+  perform pg_temp.avancar(v_id, 'em_andamento', pg_temp.no_mes(0.92));
 
   -- #1006 agendado para daqui a 3 dias, 14h
   -- 1x 1.290 + 2x 79,90 = R$ 1.449,80
@@ -208,9 +220,9 @@ begin
       pg_temp.item('Fechadura digital biométrica', 1),
       pg_temp.item('Tomada inteligente', 2)),
     'Porta de madeira maciça: levar broca e gabarito para fechadura de embutir.',
-    now() - interval '7 days');
-  perform pg_temp.avancar(v_id, 'aprovado', now() - interval '5 days', p_forma_pagamento => 'boleto');
-  perform pg_temp.avancar(v_id, 'agendado', now() - interval '4 days',
+    pg_temp.no_mes(0.28));
+  perform pg_temp.avancar(v_id, 'aprovado', pg_temp.no_mes(0.45), p_forma_pagamento => 'boleto');
+  perform pg_temp.avancar(v_id, 'agendado', pg_temp.no_mes(0.55),
     p_tecnico => 'Pedro Souza', p_data_instalacao => v_hoje + interval '3 days 14 hours');
 
   -- #1007 aprovado, aguardando agendamento
@@ -220,8 +232,8 @@ begin
       pg_temp.item('Interruptor inteligente touch', 3),
       pg_temp.item('Assistente de voz', 1)),
     'Trocar interruptores da sala e dos quartos. Confirmar se há fio neutro nas caixas.',
-    now() - interval '6 days');
-  perform pg_temp.avancar(v_id, 'aprovado', now() - interval '4 days', p_forma_pagamento => 'pix');
+    pg_temp.no_mes(0.38));
+  perform pg_temp.avancar(v_id, 'aprovado', pg_temp.no_mes(0.60), p_forma_pagamento => 'pix');
 
   -- #1008 agendado para daqui a 5 dias, 10h
   -- 2x 159 + 6x 89,90 + 1x 349 = R$ 1.206,40
@@ -231,9 +243,9 @@ begin
       pg_temp.item('Lâmpada inteligente RGB', 6),
       pg_temp.item('Hub de automação Zigbee', 1)),
     'Sanca de LED na sala; cliente prefere instalação pela manhã.',
-    now() - interval '5 days');
-  perform pg_temp.avancar(v_id, 'aprovado', now() - interval '3 days', p_forma_pagamento => 'dinheiro');
-  perform pg_temp.avancar(v_id, 'agendado', now() - interval '2 days',
+    pg_temp.no_mes(0.48));
+  perform pg_temp.avancar(v_id, 'aprovado', pg_temp.no_mes(0.65), p_forma_pagamento => 'dinheiro');
+  perform pg_temp.avancar(v_id, 'agendado', pg_temp.no_mes(0.70),
     p_tecnico => 'Pedro Souza', p_data_instalacao => v_hoje + interval '5 days 10 hours');
 
   -- #1009 orçamento
@@ -243,7 +255,7 @@ begin
       pg_temp.item('Fechadura digital biométrica', 1),
       pg_temp.item('Lâmpada inteligente RGB', 4)),
     'Portão eletrônico antigo, verificar compatibilidade.',
-    now() - interval '1 day');
+    pg_temp.no_mes(0.80));
 
   -- #1010 orçamento — exemplo do enunciado
   -- 2x Câmera IP (450) + 1x Sensor de presença (180) = R$ 1.080,00
@@ -252,6 +264,6 @@ begin
       pg_temp.item('Câmera IP', 2),
       pg_temp.item('Sensor de presença', 1)),
     'Câmeras na garagem e no quintal; sensor no corredor de entrada.',
-    now() - interval '3 hours');
+    pg_temp.no_mes(0.95));
 end;
 $$;
