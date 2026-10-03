@@ -120,3 +120,8 @@ export const PAGAMENTO_LABEL: Record<FormaPagamento, string> = {
   boleto: 'Boleto',
   dinheiro: 'Dinheiro',
 }
+
+// Busca sem diferenciar maiúsculas nem acentos ("joao" encontra "João").
+export function normalizarBusca(texto: string) {
+  return texto.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase()
+}

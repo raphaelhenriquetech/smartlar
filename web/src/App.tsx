@@ -7,6 +7,8 @@ import Login from './pages/Login'
 import Produtos from './pages/Produtos'
 import Clientes from './pages/Clientes'
 import NovoPedido from './pages/NovoPedido'
+import Pedidos from './pages/Pedidos'
+import PedidoDetalhe from './pages/PedidoDetalhe'
 
 function EmConstrucao() {
   return <EmptyState titulo="Tela em construção" />
@@ -26,9 +28,9 @@ export default function App() {
             }
           >
             <Route index element={<EmConstrucao />} />
-            <Route path="pedidos" element={<EmConstrucao />} />
+            <Route path="pedidos" element={<Pedidos />} />
             <Route path="pedidos/novo" element={<NovoPedido />} />
-            <Route path="pedidos/:id" element={<EmConstrucao />} />
+            <Route path="pedidos/:id" element={<PedidoDetalhe />} />
             <Route path="agenda" element={<EmConstrucao />} />
             <Route path="clientes" element={<Clientes />} />
             <Route path="produtos" element={<Produtos />} />

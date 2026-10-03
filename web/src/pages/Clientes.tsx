@@ -3,15 +3,14 @@ import { Link, useNavigate } from 'react-router'
 import { ChevronRight, Mail, MapPin, MessageCircle, Plus, Search } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { dados, useCarregar } from '../lib/hooks'
-import { formatarBRL, formatarData, formatarTelefone, linkMapa, linkWhatsApp, somenteDigitos } from '../lib/format'
+import {
+  formatarBRL, formatarData, formatarTelefone, linkMapa, linkWhatsApp, normalizarBusca, somenteDigitos,
+} from '../lib/format'
 import type { Cliente, PedidoDetalhado } from '../lib/types'
 import { ClienteModal } from '../components/ClienteModal'
 import {
   Button, Card, EmptyState, ErrorState, LoadingState, Modal, PageHeader, StatusBadge, Spinner, inputCls,
 } from '../components/ui'
-
-// Busca sem diferenciar maiúsculas nem acentos ("joao" encontra "João").
-const normalizar = (texto: string) => texto.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
 
 export default function Clientes() {
   const { data: clientes, carregando, erro, recarregar } = useCarregar(() =>
@@ -21,10 +20,10 @@ export default function Clientes() {
   const [cadastrando, setCadastrando] = useState(false)
   const [selecionado, setSelecionado] = useState<Cliente | null>(null)
 
-  const termo = normalizar(busca.trim())
+  const termo = normalizarBusca(busca.trim())
   const digitos = somenteDigitos(busca)
   const filtrados = (clientes ?? []).filter(
-    (c) => !termo || normalizar(c.nome).includes(termo) || (digitos.length > 0 && c.telefone.includes(digitos)),
+    (c) => !termo || normalizarBusca(c.nome).includes(termo) || (digitos.length > 0 && c.telefone.includes(digitos)),
   )
 
   return (

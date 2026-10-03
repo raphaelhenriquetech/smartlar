@@ -229,3 +229,35 @@ export function ErrorState({ mensagem, onTentarNovamente }: { mensagem: string; 
     </div>
   )
 }
+
+// Confirmação ---------------------------------------------------------------------
+
+export function ConfirmModal({
+  titulo, mensagem, rotuloConfirmar, perigoso, carregando, onConfirmar, onFechar,
+}: {
+  titulo: string
+  mensagem: ReactNode
+  rotuloConfirmar: string
+  perigoso?: boolean
+  carregando?: boolean
+  onConfirmar: () => void
+  onFechar: () => void
+}) {
+  return (
+    <Modal
+      aberto
+      titulo={titulo}
+      onFechar={onFechar}
+      rodape={
+        <>
+          <Button variante="secondary" onClick={onFechar}>Voltar</Button>
+          <Button variante={perigoso ? 'danger' : 'primary'} carregando={carregando} onClick={onConfirmar}>
+            {rotuloConfirmar}
+          </Button>
+        </>
+      }
+    >
+      <div className="text-sm text-slate-600">{mensagem}</div>
+    </Modal>
+  )
+}
