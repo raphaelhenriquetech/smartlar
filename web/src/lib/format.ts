@@ -125,3 +125,10 @@ export const PAGAMENTO_LABEL: Record<FormaPagamento, string> = {
 export function normalizarBusca(texto: string) {
   return texto.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase()
 }
+
+// CEP ---------------------------------------------------------------------------
+
+export function formatarCep(valor: string) {
+  const d = somenteDigitos(valor).slice(0, 8)
+  return d.length > 5 ? `${d.slice(0, 5)}-${d.slice(5)}` : d
+}
