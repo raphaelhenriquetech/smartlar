@@ -1,0 +1,14 @@
+# Sistema
+.DS_Store
+
+# Dependências e build
+node_modules/
+dist/
+
+# Variáveis de ambiente (nunca versionar chaves)
+.env
+.env.*
+!.env.example
+
+# Vercel
+.vercel
